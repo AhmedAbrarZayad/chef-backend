@@ -36,7 +36,7 @@ const client = new MongoClient(uri, {
   }
 });
 let db;
-let meals, reviews, favourites, orders, users;
+let meals, reviews, favourites, orders, users, requests;
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -124,6 +124,10 @@ app.post('/addReview', async (req, res) => {
 app.get('/all-reviews', async (req, res) => {
     const limit = parseInt(req.query.limit) || 0;
     const query = {}
+    const email = req.query.email;
+    if (email) {
+      query.userEmail = email;
+    }
     const cursor = reviews.find(query).limit(limit);
     const result = await cursor.toArray();
     res.send(result);
@@ -169,6 +173,16 @@ app.post('/addOrder', async (req, res) => {
     res.send(result);
 })
 
+app.get('/orders', async (req, res) => {
+    const query = {};
+    const email = req.query.email;
+    if (email) {
+        query.userEmail = email;
+    }
+    const cursor = orders.find(query);
+    const result = await cursor.toArray();
+    res.send(result);
+})
 
 // Users
 
@@ -185,6 +199,15 @@ app.get('/users', async (req, res) => {
     const result = await cursor.toArray();
     res.send(result);
 })
+
+
+// Requests
+app.post('/addRequest', async (req, res) => {
+    const request = req.body;
+    const result = await requests.insertOne(request);
+    res.send(result);
+})
+
 
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
