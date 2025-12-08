@@ -36,7 +36,7 @@ const client = new MongoClient(uri, {
   }
 });
 let db;
-let meals, reviews, favourites;
+let meals, reviews, favourites, orders;
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -47,6 +47,7 @@ async function run() {
     meals = db.collection("meals");
     reviews = db.collection("reviews");
     favourites = db.collection("favourites");
+    orders = db.collection("orders");
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
@@ -142,6 +143,30 @@ app.post('/addFavourite', async (req, res) => {
     res.send(result);
 })
 
+app.delete('/removeFavourite', async (req, res) => {
+    const userEmail = req.query.userEmail;
+    const mealId = req.query.mealId;
+    const query = { userEmail: userEmail, mealId: mealId };
+    const result = await favourites.deleteOne(query);
+    res.send(result);
+})
+
+app.get('/favourites', async (req, res) => {
+    const userEmail = req.query.userEmail;
+    const mealId = req.query.mealId;
+    const query = { userEmail: userEmail, mealId: mealId };
+    const cursor = favourites.find(query);
+    const result = await cursor.toArray();
+    res.send(result);
+})
+
+// Orders
+
+app.post('/addOrder', async (req, res) => {
+    const order = req.body;
+    const result = await orders.insertOne(order);
+    res.send(result);
+})
 
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
