@@ -70,7 +70,7 @@ app.get('/all-meals', async (req, res) => {
         const search = req.query.search || ''; // search term
         const sortBy = req.query.sortBy || 'foodName'; // default sort field
         const order = req.query.order === 'desc' ? -1 : 1; // sort order
-        console.log({page, limit, skip, search, sortBy, order});
+        //console.log({page, limit, skip, search, sortBy, order});
 
         // Build filter
         const filter = {};
@@ -109,6 +109,8 @@ app.get('/meal/:id', async (req, res) => {
     const meal = await meals.findOne(query);
     res.send(meal);
 })
+
+
 // Reviews
 app.post('/addReview', async (req, res) => {
     const review = req.body;
@@ -120,6 +122,14 @@ app.get('/all-reviews', async (req, res) => {
     const limit = parseInt(req.query.limit) || 0;
     const query = {}
     const cursor = reviews.find(query).limit(limit);
+    const result = await cursor.toArray();
+    res.send(result);
+})
+
+app.get('/reviews/:id', async (req, res) => {
+    const id = req.params.id;
+    const query = { foodId: id };
+    const cursor = reviews.find(query);
     const result = await cursor.toArray();
     res.send(result);
 })
