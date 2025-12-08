@@ -178,6 +178,14 @@ app.post('/addUsers', async (req, res) => {
     res.send(result);
 })
 
+app.get('/users', async (req, res) => {
+    const email = req.query.email;
+    const query = { email: email };
+    const cursor = users.find(query);
+    const result = await cursor.toArray();
+    res.send(result);
+})
+
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
