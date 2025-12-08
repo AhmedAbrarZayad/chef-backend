@@ -36,7 +36,7 @@ const client = new MongoClient(uri, {
   }
 });
 let db;
-let meals, reviews;
+let meals, reviews, favourites;
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -46,6 +46,7 @@ async function run() {
     db = client.db("meals");
     meals = db.collection("meals");
     reviews = db.collection("reviews");
+    favourites = db.collection("favourites");
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
@@ -131,6 +132,13 @@ app.get('/reviews/:id', async (req, res) => {
     const query = { foodId: id };
     const cursor = reviews.find(query);
     const result = await cursor.toArray();
+    res.send(result);
+})
+
+// Favourites
+app.post('/addFavourite', async (req, res) => {
+    const favourite = req.body;
+    const result = await favourites.insertOne(favourite);
     res.send(result);
 })
 
