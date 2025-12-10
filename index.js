@@ -122,15 +122,21 @@ app.post('/addReview', async (req, res) => {
 })
 
 app.get('/all-reviews', async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+
     const limit = parseInt(req.query.limit) || 0;
+    const skip = (page - 1) * limit;
     const query = {}
-    const email = req.query.email;
-    if (email) {
-      query.userEmail = email;
+    const name = req.query.name;
+    if (name) {
+      query.reviewerName = name;
     }
-    const cursor = reviews.find(query).limit(limit);
-    const result = await cursor.toArray();
-    res.send(result);
+    const total = await reviews.countDocuments(query);
+    const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
+    //console.log({page, limit, skip, email});
+    const cursor = reviews.find(query).skip(skip).limit(limit);
+    const result = await cursor.toArray()
+    res.send({ totalPages, items: result });
 })
 
 app.get('/reviews/:id', async (req, res) => {
@@ -138,6 +144,27 @@ app.get('/reviews/:id', async (req, res) => {
     const query = { foodId: id };
     const cursor = reviews.find(query);
     const result = await cursor.toArray();
+    res.send(result);
+})
+
+app.delete('/reviews/:reviewId', async (req, res) => {
+    const reviewId = req.params.reviewId;
+    const query = { _id: new ObjectId(reviewId) };
+    const result = await reviews.deleteOne(query);
+    res.send(result);
+})
+
+app.patch('/reviews/:reviewId', async (req, res) => {
+    const reviewId = req.params.reviewId;
+    const updatedReview = req.body;
+    const filter = { _id: new ObjectId(reviewId) };
+    const updateDoc = {
+        $set: {
+            rating: updatedReview.rating,
+            comment: updatedReview.comment,
+        }
+    }
+    const result = await reviews.updateOne(filter, updateDoc);
     res.send(result);
 })
 
@@ -159,7 +186,10 @@ app.delete('/removeFavourite', async (req, res) => {
 app.get('/favourites', async (req, res) => {
     const userEmail = req.query.userEmail;
     const mealId = req.query.mealId;
-    const query = { userEmail: userEmail, mealId: mealId };
+    const query = { userEmail: userEmail };
+    if(mealId){
+        query.mealId = mealId;
+    }
     const cursor = favourites.find(query);
     const result = await cursor.toArray();
     res.send(result);
@@ -174,14 +204,19 @@ app.post('/addOrder', async (req, res) => {
 })
 
 app.get('/orders', async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 3;
+    const skip = (page - 1) * limit;
     const query = {};
     const email = req.query.email;
     if (email) {
         query.userEmail = email;
     }
-    const cursor = orders.find(query);
+    const total = await orders.countDocuments(query);
+    const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
+    const cursor = orders.find(query).skip(skip).limit(limit);
     const result = await cursor.toArray();
-    res.send(result);
+    res.send({ totalPages, items: result });
 })
 
 // Users
