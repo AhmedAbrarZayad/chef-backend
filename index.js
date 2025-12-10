@@ -1,7 +1,8 @@
 const express = require('express')
 const cors = require('cors')
 require('dotenv').config();
-
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const crypto = require('crypto');
 const app = express()
 const port = process.env.PORT || 3000
 
@@ -16,6 +17,15 @@ var serviceAccount = require("./restaurant-c51e9-firebase-adminsdk.json");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
+
+
+
+function generateTrackingId() {
+  const prefix = "LOC";
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const randomBytes = crypto.randomBytes(8).toString('hex').toUpperCase();
+  return `${prefix}-${date}-${randomBytes}`;
+}
 
 
 app.get('/', (req, res) => {
@@ -36,7 +46,7 @@ const client = new MongoClient(uri, {
   }
 });
 let db;
-let meals, reviews, favourites, orders, users, requests;
+let meals, reviews, favourites, orders, users, requests, paymentCollection;
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -49,6 +59,7 @@ async function run() {
     favourites = db.collection("favourites");
     orders = db.collection("orders");
     users = db.collection("users");
+    paymentCollection = db.collection("payments");
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
@@ -210,8 +221,9 @@ app.get('/orders', async (req, res) => {
     const query = {};
     const email = req.query.email;
     if (email) {
-        query.userEmail = email;
+      query.userEmail = email;
     }
+    query.paymentStatus = "Pending";
     const total = await orders.countDocuments(query);
     const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
     const cursor = orders.find(query).skip(skip).limit(limit);
@@ -255,26 +267,25 @@ app.patch('/payment-success', async (req, res) => {
   if (exists) return res.send({ message: "Payment already processed" });
 
   if (session.payment_status === "paid") {
-    const parcelId = session.metadata.parcelId;
     const trackingId = generateTrackingId();
 
     await paymentCollection.insertOne({
       amount: session.amount_total / 100,
       currency: session.currency,
-      parcelId,
+      orderId: session.metadata.orderId,
       transactionId,
       paymentDate: new Date(),
       paymentStatus: "paid",
       customerEmail: session.customer_email
     });
 
-    await parcelCollection.updateOne(
-      { _id: new ObjectId(parcelId) },
-      { $set: { paymentStatus: "paid", deliveryStatus: "pending", trackingId } }
+    await orders.updateOne(
+      { _id: new ObjectId(session.metadata.orderId) },
+      { $set: { paymentStatus: "paid", trackingId } }
     );
 
     // Log track start
-    await logTracking(trackingId, "pending", session.customer_email);
+    // await logTracking(trackingId, "pending", session.customer_email);
   }
 
   res.send({ success: true });
@@ -293,9 +304,9 @@ app.post('/create-checkout-session', async (req, res) => {
     }],
     customer_email: info.senderEmail,
     mode: "payment",
-    metadata: { parcelId: info.id },
-    success_url: `${process.env.SITE_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${process.env.SITE_DOMAIN}/payment-failed`,
+    metadata: { orderId: info.id },
+    success_url: `${process.env.DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.DOMAIN}/payment-failed`,
   });
 
   res.send({ url: session.url });
