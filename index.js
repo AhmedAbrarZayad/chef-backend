@@ -244,6 +244,64 @@ app.post('/addRequest', async (req, res) => {
 })
 
 
+// Payment
+
+app.patch('/payment-success', async (req, res) => {
+  const sessionId = req.query.session_id;
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  const transactionId = session.payment_intent;
+
+  const exists = await paymentCollection.findOne({ transactionId });
+  if (exists) return res.send({ message: "Payment already processed" });
+
+  if (session.payment_status === "paid") {
+    const parcelId = session.metadata.parcelId;
+    const trackingId = generateTrackingId();
+
+    await paymentCollection.insertOne({
+      amount: session.amount_total / 100,
+      currency: session.currency,
+      parcelId,
+      transactionId,
+      paymentDate: new Date(),
+      paymentStatus: "paid",
+      customerEmail: session.customer_email
+    });
+
+    await parcelCollection.updateOne(
+      { _id: new ObjectId(parcelId) },
+      { $set: { paymentStatus: "paid", deliveryStatus: "pending", trackingId } }
+    );
+
+    // Log track start
+    await logTracking(trackingId, "pending", session.customer_email);
+  }
+
+  res.send({ success: true });
+});
+
+app.post('/create-checkout-session', async (req, res) => {
+  const info = req.body;
+  const session = await stripe.checkout.sessions.create({
+    line_items: [{
+      price_data: {
+        currency: "usd",
+        product_data: { name: info.id },
+        unit_amount: Math.round(info.cost * 100),
+      },
+      quantity: 1
+    }],
+    customer_email: info.senderEmail,
+    mode: "payment",
+    metadata: { parcelId: info.id },
+    success_url: `${process.env.SITE_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.SITE_DOMAIN}/payment-failed`,
+  });
+
+  res.send({ url: session.url });
+});
+
+
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
