@@ -490,8 +490,10 @@ app.post('/create-checkout-session', async (req, res) => {
 // Statistics
 
 app.get('/total-payments', async (req, res) => {
-  const totalPayments = await paymentCollection.countDocuments({ paymentStatus: "paid" });
-  res.send({ totalPayments });
+  const payments = await paymentCollection.find({ paymentStatus: "paid" }).toArray();
+  const totalPaymentAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const totalPayments = payments.length;
+  res.send({ totalPaymentAmount, totalPayments });
 })
 
 app.get('/total-users', async (req, res) => {
@@ -507,6 +509,43 @@ app.get('/pending-orders-count', async (req, res) => {
 app.get('/delivered-orders-count', async (req, res) => {
   const deliveredOrders = await orders.countDocuments({ orderStatus: "delivered" });
   res.send({ deliveredOrders });
+})
+
+app.get('/statistics-chart-data', async (req, res) => {
+  try {
+    // Order status breakdown
+    const pending = await orders.countDocuments({ orderStatus: "pending" });
+    const preparing = await orders.countDocuments({ orderStatus: "preparing" });
+    const delivered = await orders.countDocuments({ orderStatus: "delivered" });
+    
+    // User role breakdown
+    const regularUsers = await users.countDocuments({ role: "user" });
+    const chefs = await users.countDocuments({ role: "chef" });
+    const admins = await users.countDocuments({ role: "admin" });
+    
+    // Payment breakdown
+    const paidOrders = await orders.countDocuments({ paymentStatus: "paid" });
+    const pendingPayments = await orders.countDocuments({ paymentStatus: "Pending" });
+    
+    res.send({
+      orderStatus: [
+        { name: "Pending", value: pending },
+        { name: "Preparing", value: preparing },
+        { name: "Delivered", value: delivered }
+      ],
+      userRoles: [
+        { name: "Users", value: regularUsers },
+        { name: "Chefs", value: chefs },
+        { name: "Admins", value: admins }
+      ],
+      paymentStatus: [
+        { name: "Paid", value: paidOrders },
+        { name: "Pending", value: pendingPayments }
+      ]
+    });
+  } catch (error) {
+    res.status(500).send({ error: "Failed to fetch chart data" });
+  }
 })
 
 app.listen(port, () => {
