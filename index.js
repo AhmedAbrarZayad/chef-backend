@@ -7,8 +7,12 @@ const app = express()
 const port = process.env.PORT || 3000
 
 // Middleware
-app.use(cors())
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  credentials: true
+}))
 app.use(express.json())
+
 
 var admin = require("firebase-admin");
 
@@ -17,6 +21,7 @@ var serviceAccount = require("./restaurant-c51e9-firebase-adminsdk.json");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
+
 
 
 
@@ -70,8 +75,41 @@ async function run() {
 run().catch(console.dir);
 
 
+
+// Firebase Auth Middleware
+const verifFirebaseToken = async (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).send({ message: 'Unauthorized' });
+
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.decodedEmail = decoded.email;
+  } catch (err) {
+    return res.status(401).send({ message: 'Unauthorized' });
+  }
+  next();
+};
+
+const verifyAdmin = async (req, res, next) => {
+  const email = req.decodedEmail;
+  const query = {email: email};
+  const user = await users.findOne(query);
+  if (!user || user.role !== 'admin') {
+    return res.status(403).send({ message: 'Forbidden access' });
+  }
+  next();
+};
+const verifyChef = async (req, res, next) => {
+  const email = req.decodedEmail;
+  const query = {email: email};
+  const user = await users.findOne(query);
+  if (!user || user.role !== 'chef') {
+    return res.status(403).send({ message: 'Forbidden access' });
+  }
+  next();
+};
 // Meals
-app.post('/addMeal', async (req, res) => {
+app.post('/addMeal', verifFirebaseToken, verifyChef, async (req, res) => {
     const meal = req.body;
     
     // Check if user is marked as fraud
@@ -125,7 +163,7 @@ app.get('/all-meals', async (req, res) => {
     }
 });
 
-app.get('/chef-meals', async (req, res) => {
+app.get('/chef-meals', verifFirebaseToken, verifyChef, async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 12; // default page size
@@ -156,21 +194,21 @@ app.get('/chef-meals', async (req, res) => {
     }
 })
 
-app.get('/meal/:id', async (req, res) => {
+app.get('/meal/:id',verifFirebaseToken, async (req, res) => {
     const id = req.params.id;
     const query = { _id: new ObjectId(id) };
     const meal = await meals.findOne(query);
     res.send(meal);
 })
 
-app.delete('/delete-meal/:id', async (req, res) => {
+app.delete('/delete-meal/:id', verifFirebaseToken, verifyChef, async (req, res) => {
     const id = req.params.id;
     const query = { _id: new ObjectId(id) };
     const result = await meals.deleteOne(query);
     res.send(result);
 })
 
-app.patch('/update-meal/:id', async (req, res) => {
+app.patch('/update-meal/:id', verifFirebaseToken, verifyChef, async (req, res) => {
     const id = req.params.id;
     const updatedMeal = req.body;
     const filter = { _id: new ObjectId(id) };
@@ -191,7 +229,7 @@ app.patch('/update-meal/:id', async (req, res) => {
 
 
 // Reviews
-app.post('/addReview', async (req, res) => {
+app.post('/addReview', verifFirebaseToken, async (req, res) => {
     const review = req.body;
     const result = await reviews.insertOne(review);
     res.send(result);
@@ -215,7 +253,7 @@ app.get('/all-reviews', async (req, res) => {
     res.send({ totalPages, items: result });
 })
 
-app.get('/reviews/:id', async (req, res) => {
+app.get('/reviews/:id', verifFirebaseToken, async (req, res) => {
     const id = req.params.id;
     const query = { foodId: id };
     const cursor = reviews.find(query);
@@ -223,14 +261,14 @@ app.get('/reviews/:id', async (req, res) => {
     res.send(result);
 })
 
-app.delete('/reviews/:reviewId', async (req, res) => {
+app.delete('/reviews/:reviewId', verifFirebaseToken, async (req, res) => {
     const reviewId = req.params.reviewId;
     const query = { _id: new ObjectId(reviewId) };
     const result = await reviews.deleteOne(query);
     res.send(result);
 })
 
-app.patch('/reviews/:reviewId', async (req, res) => {
+app.patch('/reviews/:reviewId', verifFirebaseToken, async (req, res) => {
     const reviewId = req.params.reviewId;
     const updatedReview = req.body;
     const filter = { _id: new ObjectId(reviewId) };
@@ -245,13 +283,13 @@ app.patch('/reviews/:reviewId', async (req, res) => {
 })
 
 // Favourites
-app.post('/addFavourite', async (req, res) => {
+app.post('/addFavourite', verifFirebaseToken, async (req, res) => {
     const favourite = req.body;
     const result = await favourites.insertOne(favourite);
     res.send(result);
 })
 
-app.delete('/removeFavourite', async (req, res) => {
+app.delete('/removeFavourite', verifFirebaseToken, async (req, res) => {
     const userEmail = req.query.userEmail;
     const mealId = req.query.mealId;
     const query = { userEmail: userEmail, mealId: mealId };
@@ -259,7 +297,7 @@ app.delete('/removeFavourite', async (req, res) => {
     res.send(result);
 })
 
-app.get('/favourites', async (req, res) => {
+app.get('/favourites', verifFirebaseToken, async (req, res) => {
     const userEmail = req.query.userEmail;
     const mealId = req.query.mealId;
     const query = { userEmail: userEmail };
@@ -273,7 +311,7 @@ app.get('/favourites', async (req, res) => {
 
 // Orders
 
-app.post('/addOrder', async (req, res) => {
+app.post('/addOrder', verifFirebaseToken, async (req, res) => {
     const order = req.body;
     
     // Check if user is marked as fraud
@@ -286,7 +324,7 @@ app.post('/addOrder', async (req, res) => {
     res.send(result);
 })
 
-app.get('/orders', async (req, res) => {
+app.get('/orders', verifFirebaseToken, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 3;
     const skip = (page - 1) * limit;
@@ -303,7 +341,7 @@ app.get('/orders', async (req, res) => {
     res.send({ totalPages, items: result });
 })
 
-app.get('/pending-orders', async (req, res) => {
+app.get('/pending-orders', verifFirebaseToken, async (req, res) => {
     const chefId = req.query.chefId;
     console.log(chefId);
     const query = { orderStatus: { $ne: "delivered" }, chefId: chefId };
@@ -313,7 +351,7 @@ app.get('/pending-orders', async (req, res) => {
     res.send(result);
 })
 
-app.patch('/update-order-status/:id', async (req, res) => {
+app.patch('/update-order-status/:id', verifFirebaseToken, async (req, res) => {
     const id = req.params.id;
     const updatedStatus = req.body;
     const filter = { _id: new ObjectId(id) };
@@ -334,7 +372,7 @@ app.post('/addUsers', async (req, res) => {
     res.send(result);
 })
 
-app.get('/users', async (req, res) => {
+app.get('/users', verifFirebaseToken, async (req, res) => {
     const email = req.query.email;
     const query = { email: email };
     const cursor = users.find(query);
@@ -342,13 +380,13 @@ app.get('/users', async (req, res) => {
     res.send(result);
 })
 
-app.get('/all-users', async (req, res) => {
+app.get('/all-users', verifFirebaseToken, async (req, res) => {
     const cursor = users.find();
     const result = await cursor.toArray();
     res.send(result);
 })
 
-app.patch('/update-fraud-status/:id', async (req, res) => {
+app.patch('/update-fraud-status/:id', verifFirebaseToken, async (req, res) => {
     const id = req.params.id;
     const update = {
       $set: {
@@ -360,14 +398,14 @@ app.patch('/update-fraud-status/:id', async (req, res) => {
     res.send(result);
 })
 
-app.get('/check-fraud/:email', async (req, res) => {
+app.get('/check-fraud/:email', verifFirebaseToken, async (req, res) => {
     const email = req.params.email;
     const query = { email: email };
     const user = await users.findOne(query);
     res.send({ fraud: user?.fraud || false });
 })
 
-app.get('/user-role', async (req, res) => {
+app.get('/user-role', verifFirebaseToken, async (req, res) => {
     const email = req.query.email;
     const query = { email: email };
     const user = await users.findOne(query);
@@ -377,20 +415,20 @@ app.get('/user-role', async (req, res) => {
 
 
 // Requests
-app.post('/addRequest', async (req, res) => {
+app.post('/addRequest', verifFirebaseToken, async (req, res) => {
     const request = req.body;
     const result = await requests.insertOne(request);
     res.send(result);
 })
 
-app.get('/pending-requests', async (req, res) => {
+app.get('/pending-requests', verifFirebaseToken, async (req, res) => {
     const query = { requestStatus: "pending" };
     const cursor = requests.find(query);
     const result = await cursor.toArray();
     res.send(result);
 })
 
-app.patch('/approve-request/:id', async (req, res) => {
+app.patch('/approve-request/:id', verifFirebaseToken, async (req, res) => {
     const id = req.params.id;
     const { requestType, userId } = req.body;
     
@@ -413,7 +451,7 @@ app.patch('/approve-request/:id', async (req, res) => {
     }
 })
 
-app.patch('/reject-request/:id', async (req, res) => {
+app.patch('/reject-request/:id', verifFirebaseToken, async (req, res) => {
     const id = req.params.id;
     
     try {
@@ -432,7 +470,7 @@ app.patch('/reject-request/:id', async (req, res) => {
 
 // Payment
 
-app.patch('/payment-success', async (req, res) => {
+app.patch('/payment-success', verifFirebaseToken, async (req, res) => {
   const sessionId = req.query.session_id;
   const session = await stripe.checkout.sessions.retrieve(sessionId);
   const transactionId = session.payment_intent;
@@ -465,7 +503,7 @@ app.patch('/payment-success', async (req, res) => {
   res.send({ success: true });
 });
 
-app.post('/create-checkout-session', async (req, res) => {
+app.post('/create-checkout-session', verifFirebaseToken, async (req, res) => {
   const info = req.body;
   const session = await stripe.checkout.sessions.create({
     line_items: [{
@@ -489,29 +527,29 @@ app.post('/create-checkout-session', async (req, res) => {
 
 // Statistics
 
-app.get('/total-payments', async (req, res) => {
+app.get('/total-payments', verifFirebaseToken, verifyAdmin, async (req, res) => {
   const payments = await paymentCollection.find({ paymentStatus: "paid" }).toArray();
   const totalPaymentAmount = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const totalPayments = payments.length;
   res.send({ totalPaymentAmount, totalPayments });
 })
 
-app.get('/total-users', async (req, res) => {
+app.get('/total-users', verifFirebaseToken, verifyAdmin, async (req, res) => {
   const totalUsers = await users.countDocuments();
   res.send({ totalUsers });
 })
 
-app.get('/pending-orders-count', async (req, res) => {
+app.get('/pending-orders-count', verifFirebaseToken, verifyAdmin, async (req, res) => {
   const pendingOrders = await orders.countDocuments({ orderStatus: { $ne: "delivered" } });
   res.send({ pendingOrders });
 })
 
-app.get('/delivered-orders-count', async (req, res) => {
+app.get('/delivered-orders-count', verifFirebaseToken, verifyAdmin, async (req, res) => {
   const deliveredOrders = await orders.countDocuments({ orderStatus: "delivered" });
   res.send({ deliveredOrders });
 })
 
-app.get('/statistics-chart-data', async (req, res) => {
+app.get('/statistics-chart-data', verifFirebaseToken, verifyAdmin, async (req, res) => {
   try {
     // Order status breakdown
     const pending = await orders.countDocuments({ orderStatus: "pending" });
