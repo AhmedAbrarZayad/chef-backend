@@ -487,6 +487,13 @@ app.post('/create-checkout-session', async (req, res) => {
 });
 
 
+// Statistics
+
+app.get('/total-payments', async (req, res) => {
+  const totalPayments = await paymentCollection.countDocuments({ paymentStatus: "paid" });
+  res.send({ totalPayments });
+})
+
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
