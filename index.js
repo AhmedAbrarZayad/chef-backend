@@ -494,6 +494,21 @@ app.get('/total-payments', async (req, res) => {
   res.send({ totalPayments });
 })
 
+app.get('/total-users', async (req, res) => {
+  const totalUsers = await users.countDocuments();
+  res.send({ totalUsers });
+})
+
+app.get('/pending-orders-count', async (req, res) => {
+  const pendingOrders = await orders.countDocuments({ orderStatus: { $ne: "delivered" } });
+  res.send({ pendingOrders });
+})
+
+app.get('/delivered-orders-count', async (req, res) => {
+  const deliveredOrders = await orders.countDocuments({ orderStatus: "delivered" });
+  res.send({ deliveredOrders });
+})
+
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
