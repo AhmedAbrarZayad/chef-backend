@@ -60,6 +60,7 @@ async function run() {
     orders = db.collection("orders");
     users = db.collection("users");
     paymentCollection = db.collection("payments");
+    requests = db.collection("requests");
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
@@ -72,6 +73,13 @@ run().catch(console.dir);
 // Meals
 app.post('/addMeal', async (req, res) => {
     const meal = req.body;
+    
+    // Check if user is marked as fraud
+    const user = await users.findOne({ email: meal.userEmail });
+    if (user?.fraud === "yes") {
+        return res.status(403).send({ error: 'Fraud users cannot create meals' });
+    }
+    
     const result = await meals.insertOne(meal);
     res.send(result);
 });
@@ -267,6 +275,13 @@ app.get('/favourites', async (req, res) => {
 
 app.post('/addOrder', async (req, res) => {
     const order = req.body;
+    
+    // Check if user is marked as fraud
+    const user = await users.findOne({ email: order.userEmail });
+    if (user?.fraud === "yes") {
+        return res.status(403).send({ error: 'Fraud users cannot place orders' });
+    }
+    
     const result = await orders.insertOne(order);
     res.send(result);
 })
@@ -345,6 +360,13 @@ app.patch('/update-fraud-status/:id', async (req, res) => {
     res.send(result);
 })
 
+app.get('/check-fraud/:email', async (req, res) => {
+    const email = req.params.email;
+    const query = { email: email };
+    const user = await users.findOne(query);
+    res.send({ fraud: user?.fraud || false });
+})
+
 app.get('/user-role', async (req, res) => {
     const email = req.query.email;
     const query = { email: email };
@@ -359,6 +381,52 @@ app.post('/addRequest', async (req, res) => {
     const request = req.body;
     const result = await requests.insertOne(request);
     res.send(result);
+})
+
+app.get('/pending-requests', async (req, res) => {
+    const query = { requestStatus: "pending" };
+    const cursor = requests.find(query);
+    const result = await cursor.toArray();
+    res.send(result);
+})
+
+app.patch('/approve-request/:id', async (req, res) => {
+    const id = req.params.id;
+    const { requestType, userId } = req.body;
+    
+    try {
+        // Update request status to approved
+        await requests.updateOne(
+            { _id: id },
+            { $set: { requestStatus: "approved" } }
+        );
+        
+        // Update user role based on request type
+        await users.updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: { role: requestType } }
+        );
+        
+        res.send({ success: true, message: "Request approved successfully" });
+    } catch (error) {
+        res.status(500).send({ error: "Failed to approve request" });
+    }
+})
+
+app.patch('/reject-request/:id', async (req, res) => {
+    const id = req.params.id;
+    
+    try {
+        // Update request status to rejected
+        await requests.updateOne(
+            { _id: id },
+            { $set: { requestStatus: "rejected" } }
+        );
+        
+        res.send({ success: true, message: "Request rejected successfully" });
+    } catch (error) {
+        res.status(500).send({ error: "Failed to reject request" });
+    }
 })
 
 
