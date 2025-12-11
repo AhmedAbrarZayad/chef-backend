@@ -333,7 +333,7 @@ app.get('/orders', verifFirebaseToken, async (req, res) => {
     if (email) {
       query.userEmail = email;
     }
-    query.paymentStatus = "Pending";
+    query.orderStatus = { $ne: "delivered" };
     const total = await orders.countDocuments(query);
     const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
     const cursor = orders.find(query).skip(skip).limit(limit);
@@ -343,7 +343,7 @@ app.get('/orders', verifFirebaseToken, async (req, res) => {
 
 app.get('/pending-orders', verifFirebaseToken, async (req, res) => {
     const chefId = req.query.chefId;
-    console.log(chefId);
+    //console.log(chefId);
     const query = { orderStatus: { $ne: "delivered" }, chefId: chefId };
     const cursor = orders.find(query);
     const result = await cursor.toArray();
@@ -430,12 +430,13 @@ app.get('/pending-requests', verifFirebaseToken, async (req, res) => {
 
 app.patch('/approve-request/:id', verifFirebaseToken, async (req, res) => {
     const id = req.params.id;
+    console.log(id);
     const { requestType, userId } = req.body;
     
     try {
         // Update request status to approved
         await requests.updateOne(
-            { _id: id },
+            { _id: new ObjectId(id) },
             { $set: { requestStatus: "approved" } }
         );
         
@@ -457,7 +458,7 @@ app.patch('/reject-request/:id', verifFirebaseToken, async (req, res) => {
     try {
         // Update request status to rejected
         await requests.updateOne(
-            { _id: id },
+            { _id: new ObjectId(id) },
             { $set: { requestStatus: "rejected" } }
         );
         
