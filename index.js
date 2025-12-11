@@ -69,12 +69,11 @@ async function run() {
     paymentCollection = db.collection("payments");
     requests = db.collection("requests");
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
-    // Ensures that the client will close when you finish/error
-    //await client.close();
+  } catch (error) {
+    console.error("MongoDB connection error:", error);
+    throw error;
   }
 }
-run().catch(console.dir);
 
 
 
@@ -589,6 +588,12 @@ app.get('/statistics-chart-data', verifFirebaseToken, verifyAdmin, async (req, r
   }
 })
 
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
-})
+// Start server only after MongoDB connection
+run().then(() => {
+  app.listen(port, () => {
+    console.log(`Example app listening on port ${port}`)
+  })
+}).catch(err => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
+});
