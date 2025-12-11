@@ -247,6 +247,14 @@ app.get('/users', async (req, res) => {
     res.send(result);
 })
 
+app.get('/user-role', async (req, res) => {
+    const email = req.query.email;
+    const query = { email: email };
+    const user = await users.findOne(query);
+    //console.log(user?.role);
+    res.send({ role: user?.role || 'user' });
+})
+
 
 // Requests
 app.post('/addRequest', async (req, res) => {
