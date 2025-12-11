@@ -117,11 +117,68 @@ app.get('/all-meals', async (req, res) => {
     }
 });
 
+app.get('/chef-meals', async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 12; // default page size
+        const skip = (page - 1) * limit;
+        //const search = req.query.search || ''; // search term
+        //const sortBy = req.query.sortBy || 'foodName'; // default sort field
+        //const order = req.query.order === 'desc' ? -1 : 1; // sort order
+        const chefEmail = req.query.email;
+        //console.log({page, limit, skip, search, sortBy, order});
+
+        // Build filter
+        const filter = {};
+
+        filter.userEmail = chefEmail;
+
+        const total = await meals.countDocuments(filter);
+        const totalPages = limit > 0 ? Math.ceil(total / limit) : 1;
+
+        const cursor = meals.find(filter)
+                            .skip(skip)
+                            .limit(limit);
+        const result = await cursor.toArray();
+
+        res.send({ totalPages, items: result });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
+    }
+})
+
 app.get('/meal/:id', async (req, res) => {
     const id = req.params.id;
     const query = { _id: new ObjectId(id) };
     const meal = await meals.findOne(query);
     res.send(meal);
+})
+
+app.delete('/delete-meal/:id', async (req, res) => {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await meals.deleteOne(query);
+    res.send(result);
+})
+
+app.patch('/update-meal/:id', async (req, res) => {
+    const id = req.params.id;
+    const updatedMeal = req.body;
+    const filter = { _id: new ObjectId(id) };
+    const updateDoc = {
+        $set: {
+          foodName: updatedMeal.foodName,
+          foodImage: updatedMeal.foodImage,
+          price: updatedMeal.price,
+          rating: updatedMeal.rating,
+          ingredients: updatedMeal.ingredients,
+          estimatedDeliveryTime: updatedMeal.estimatedDeliveryTime,
+          chefExperience: updatedMeal.chefExperience,
+        }
+    }
+    const result = await meals.updateOne(filter, updateDoc);
+    res.send(result);
 })
 
 
@@ -229,6 +286,29 @@ app.get('/orders', async (req, res) => {
     const cursor = orders.find(query).skip(skip).limit(limit);
     const result = await cursor.toArray();
     res.send({ totalPages, items: result });
+})
+
+app.get('/pending-orders', async (req, res) => {
+    const chefId = req.query.chefId;
+    console.log(chefId);
+    const query = { orderStatus: { $ne: "delivered" }, chefId: chefId };
+    const cursor = orders.find(query);
+    const result = await cursor.toArray();
+    //console.log(result);
+    res.send(result);
+})
+
+app.patch('/update-order-status/:id', async (req, res) => {
+    const id = req.params.id;
+    const updatedStatus = req.body;
+    const filter = { _id: new ObjectId(id) };
+    const updateDoc = {
+        $set: {
+          orderStatus: updatedStatus.orderStatus,
+        }
+    }
+    const result = await orders.updateOne(filter, updateDoc);
+    res.send(result);
 })
 
 // Users
