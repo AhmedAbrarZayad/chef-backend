@@ -327,6 +327,24 @@ app.get('/users', async (req, res) => {
     res.send(result);
 })
 
+app.get('/all-users', async (req, res) => {
+    const cursor = users.find();
+    const result = await cursor.toArray();
+    res.send(result);
+})
+
+app.patch('/update-fraud-status/:id', async (req, res) => {
+    const id = req.params.id;
+    const update = {
+      $set: {
+        fraud: req.body.fraudStatus
+      }
+    }
+    const filter = { _id: new ObjectId(id) };
+    const result = await users.updateOne(filter, update);
+    res.send(result);
+})
+
 app.get('/user-role', async (req, res) => {
     const email = req.query.email;
     const query = { email: email };
