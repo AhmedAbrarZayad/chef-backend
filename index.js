@@ -131,8 +131,7 @@ app.get('/all-meals', async (req, res) => {
         const search = req.query.search || ''; // search term
         const sortBy = req.query.sortBy || 'foodName'; // default sort field
         const order = req.query.order === 'desc' ? -1 : 1; // sort order
-        //console.log({page, limit, skip, search, sortBy, order});
-
+        const priceRange = req.query.priceRange || ''; // price range filter
         // Build filter
         const filter = {};
         if (search) {
@@ -142,6 +141,16 @@ app.get('/all-meals', async (req, res) => {
                 { chefName: { $regex: search, $options: 'i' } },
                 { deliveryArea: { $regex: search, $options: 'i' } },
             ];
+        }
+
+        // Price range filter
+        if (priceRange) {
+            if (priceRange === '30+') {
+                filter.price = { $gte: 30 };
+            } else {
+                const [min, max] = priceRange.split('-').map(Number);
+                filter.price = { $gte: min, $lte: max };
+            }
         }
 
         // Build sort
