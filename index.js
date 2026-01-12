@@ -378,6 +378,13 @@ app.patch('/update-order-status/:id', verifFirebaseToken, async (req, res) => {
 
 app.post('/addUsers', async (req, res) => {
     const user = req.body;
+    
+    // Check if user already exists
+    const existingUser = await users.findOne({ email: user.email });
+    if (existingUser) {
+        return res.status(200).send({ message: 'User already exists', user: existingUser });
+    }
+    
     const result = await users.insertOne(user);
     res.send(result);
 })
