@@ -394,6 +394,7 @@ app.get('/users', verifFirebaseToken, async (req, res) => {
     const query = { email: email };
     const cursor = users.find(query);
     const result = await cursor.toArray();
+    //console.log('Fetched user: ', result);
     res.send(result);
 })
 
